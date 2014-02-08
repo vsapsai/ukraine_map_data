@@ -11,3 +11,6 @@ build*
 
 # Ignore Vagrant directory
 .vagrant*
+
+# Ignore actual shapefiles.
+raw_data/ne_10m_*
