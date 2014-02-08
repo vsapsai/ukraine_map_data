@@ -8,3 +8,6 @@ build*
 # Ignore Vim helper files
 **.un~
 **.swp
+
+# Ignore Vagrant directory
+.vagrant*

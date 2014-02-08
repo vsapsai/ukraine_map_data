@@ -7,6 +7,8 @@ Ukraine map data suitable for [D3.js](http://d3js.org/) visualizations.
 
 2. If you are familiar with D3.js, just grab `ukraine.json` and go ahead, create visualizations you want.
 
+If you are unsatisfied with the provided data, please read [Data Preprocessing Guide](docs/data_preprocessing.md) which explains how to prepare your own dataset.
+
 
 ## Copyright / License
 
