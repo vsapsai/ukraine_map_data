@@ -1,0 +1,10 @@
+syntax: glob
+# Ignore Finder utility directory
+.DS_Store
+
+# Ignore build directory
+build*
+
+# Ignore Vim helper files
+**.un~
+**.swp
