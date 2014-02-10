@@ -5,17 +5,17 @@ Here data preprocessing means taking data files in provided format and convertin
 
 1. At first we convert each shapefile to [GeoJSON](http://geojson.org/) file.  Usually we perform some filtering at this step.  For example, we want data only for specific area, not for the entire world.  Or we may need data only for objects of certain size, like the biggest rivers.  Typically a shell command looks like
 
-    ogr2ogr -f GeoJSON \
-            -clipdst 20.5 43.6 42 53 \
-            build/countries.json raw_data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp
+        ogr2ogr -f GeoJSON \
+                -clipdst 20.5 43.6 42 53 \
+                build/countries.json raw_data/ne_10m_admin_0_countries/ne_10m_admin_0_countries.shp
 
 2. Then we convert each GeoJSON file to TopoJSON file.  At this step we decide which object properties will be available in JavaScript.  Mostly we are interested in `name`s and want to omit accessory properties like `note`, `comment`.  Typically a shell command looks like
 
-    topojson -p name -o lakes.topo.json lakes.json
+        topojson -p name -o lakes.topo.json lakes.json
 
 3. At the end we merge all TopoJSON files into a single TopoJSON file.  A shell command looks like
 
-    topojson -p -o full.topo.json countries.topo.json regions.topo.json …
+        topojson -p -o full.topo.json countries.topo.json regions.topo.json …
 
 
 ## Environment
