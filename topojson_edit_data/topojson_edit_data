@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+
+var fs = require("fs"),
+    optimist = require("optimist"),
+    d3 = require("d3");
+
+// Command line invocation looks like
+//
+// topojson_edit_data --property id=domain_name
+//                    --join-on name=name
+//                    --external-data regions_data.json
+//                    --out regions_with_id.topo.json
+//                    regions.topo.json
+var argv = optimist
+    .options("property", {
+        describe: "property which should be added to TopoJSON object.  Syntax is '<TopoJSON object property>=<external data object property>'",
+        demand: true,
+    })
+    .options("join-on", {
+        describe: "rule how should be matched TopoJSON objects and external data objects.  Syntax is '<TopoJSON object property>=<external data object property>'",
+        demand: true,
+    })
+    .options("external-data", {
+        describe: "external data file name",
+        demand: true,
+    })
+    .options("out", {
+        describe: "output TopoJSON file name",
+        demand: true,
+    })
+    .options("help", {
+        describe: "print help message and exit",
+        type: "boolean",
+        default: false
+    })
+    .check(function(argv) {
+        if (argv.help) return;
+        if (argv._.length != 1) throw new Error("exactly one input file required");
+        var propertyMappingFormat = /^\w+=\w+$/;
+        if (!propertyMappingFormat.test(argv["property"])) throw new Error("incorrect property mapping for 'property'");
+        if (!propertyMappingFormat.test(argv["join-on"])) throw new Error("incorrect property mapping for 'join-on'");
+        argv["property"] = argv["property"].split("=");
+        argv["join-on"] = argv["join-on"].split("=");
+    })
+    .argv;
+
+if (argv.help) return optimist.showHelp();
+
+// Make 'property' and 'join-on' arguments usable for further consumption.
+var addedProperty = argv["property"][0];
+var externalAddedProperty = argv["property"][1];
+var joinProperty = argv["join-on"][0];
+var externalJoinProperty = argv["join-on"][1];
+
+// Read 'external-data' file.
+var externalObjects = JSON.parse(fs.readFileSync(argv["external-data"], "utf-8"));
+// Mapping joinPropertyValue => externalObject.
+var externalJoinMapping = d3.map();
+externalObjects.forEach(function(externalObject) {
+    var externalJoinPropertyValue = externalObject[externalJoinProperty];
+    // join-on property should be always present.
+    if (externalJoinPropertyValue === undefined) {
+        throw new Error("Missing value for join-on property '" + externalJoinProperty + "' in '" + argv["external-data"] + "'");
+    }
+    // join-on property should be unique.
+    if (externalJoinMapping.has(externalJoinPropertyValue)) {
+        throw new Error("Duplicate value for join-on property '" + externalJoinProperty + "' in '" + argv["external-data"] + "'");
+    }
+
+    externalJoinMapping.set(externalJoinPropertyValue, externalObject);
+});
+
+// Read and update input.
+var inputObject = JSON.parse(fs.readFileSync(argv._[0], "utf-8"));
+for (var featureName in inputObject.objects) {
+    inputObject.objects[featureName].geometries.forEach(function(object) {
+        var joinPropertyValue = getProperty(object, joinProperty);
+        if (joinPropertyValue === undefined) {
+            console.log("warning: Missing value for join-on property '" + joinProperty + "'");
+            return;
+        }
+        var externalObject = externalJoinMapping.get(joinPropertyValue);
+        if (externalObject === undefined) {
+            console.log("warning: No join counterpart for value '" + joinPropertyValue + "'");
+            return;
+        }
+        var externalValue = externalObject[externalAddedProperty];
+        if (externalValue === undefined) {
+            console.log("warning: Missing value for external object property '" + externalAddedProperty + "'");
+            return;
+        }
+        setProperty(object, addedProperty, externalValue);
+    });
+}
+
+// Write updated input.
+var json = JSON.stringify(inputObject);
+fs.writeFileSync(argv.out, json, "utf-8");
+
+function getProperty(object, property) {
+    if (property === "id") {
+        return object[property];
+    } else {
+        return object.properties[property];
+    }
+}
+
+function setProperty(object, property, value) {
+    if (property === "id") {
+        object[property] = value;
+    } else {
+        object.properties[property] = value;
+    }
+}

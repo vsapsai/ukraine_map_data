@@ -14,3 +14,6 @@ build*
 
 # Ignore actual shapefiles.
 raw_data/ne_10m_*
+
+# Keep node_modules out of repository.
+topojson_edit_data/node_modules*

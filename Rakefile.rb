@@ -8,6 +8,11 @@ RAW_DATA_DIRECTORY = 'raw_data'
 
 DEFAULT_REGION = "20.5 43.6 42 53"
 
+# Returns path to reference data file `file_name`.
+def reference_input(file_name)
+    File.join(RAW_DATA_DIRECTORY, 'reference_data', file_name)
+end
+
 # Returns path for GeoJSON file corresponding to `task_symbol`.
 def geojson_output(task_symbol)
     File.join(OUTPUT_DIRECTORY, task_symbol.to_s + '.json')
@@ -66,7 +71,22 @@ def topo_task(task_symbol, geo_data_name, args={})
     task task_symbol => topojson_file
 
     CLEAN.push(geojson_file)
-    CLOBBER.push(topojson_file)
+    CLEAN.push(topojson_file)
+end
+
+# Create task(s) to generate TopoJSON file with some extra data added to an existing TopoJSON file.
+def topo_edit_data_task(task_symbol, dependent_task_symbol, property_rule, join_rule, external_data_file_name)
+    input_file = topojson_output(dependent_task_symbol)
+    result_file = topojson_output(task_symbol)
+
+    command = "topojson_edit_data/topojson_edit_data" +
+        " --property #{property_rule} --join-on #{join_rule}" +
+        " --external-data #{external_data_file_name} --out #{result_file}" +
+        " #{input_file}"
+    shell_command_task(result_file, [input_file, external_data_file_name], command)
+    task task_symbol => result_file
+
+    CLEAN.push(result_file)
 end
 
 # Create tasks to merge a few TopoJSON files into a single TopoJSON file.
@@ -89,6 +109,8 @@ topo_task :regions, 'ne_10m_admin_1_states_provinces', {
     :geo_args => %{-where "ADM0_A3 = 'UKR' AND name NOT IN ('Sevastopol', 'Kiev City')"},
     :topo_args => '-p name'}
 
+topo_edit_data_task :regions_with_id, :regions, 'id=domain_name', 'name=name', reference_input('regions_data.json')
+
 topo_task :lakes, 'ne_10m_lakes', {
     :geo_args => "-clipdst #{DEFAULT_REGION}" + ' -where "scalerank < 8"',
     :topo_args => '-p name'}
@@ -97,5 +119,5 @@ topo_task :rivers, 'ne_10m_rivers_lake_centerlines', {
     :geo_args => %{-clipdst #{DEFAULT_REGION} -where "scalerank < 5 AND featurecla != 'Lake Centerline'"},
     :topo_args => '-p name'}
 
-topo_merge_task(:full, [:countries, :regions, :lakes, :rivers])
+topo_merge_task(:full, [:countries, :regions_with_id, :lakes, :rivers])
 task :default => :full
