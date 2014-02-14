@@ -16,4 +16,4 @@ build*
 raw_data/ne_10m_*
 
 # Keep node_modules out of repository.
-topojson_edit_data/node_modules*
+topojson_edit/node_modules*

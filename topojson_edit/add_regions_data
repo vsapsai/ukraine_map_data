@@ -1,0 +1,113 @@
+#!/usr/bin/env node
+
+var fs = require("fs"),
+    optimist = require("optimist"),
+    d3 = require("d3");
+
+// Command line invocation looks like
+//
+// topojson_edit_data --input regions.topo.json
+//                    --extra-data regions_data.json
+//                    --output regions_with_id.topo.json
+var argv = optimist
+    .options("input", {
+        describe: "input TopoJSON file name",
+        demand: true,
+    })
+    .options("extra-data", {
+        describe: "extra data file name",
+        demand: true,
+    })
+    .options("output", {
+        describe: "output TopoJSON file name",
+        demand: true,
+    })
+    .options("help", {
+        describe: "print help message and exit",
+        type: "boolean",
+        default: false
+    })
+    .check(function(argv) {
+        if (argv.help) return;
+        if (argv._.length > 0) throw new Error("should be no positional arguments");
+    })
+    .argv;
+
+if (argv.help) return optimist.showHelp();
+
+var inputObject = JSON.parse(fs.readFileSync(argv.input, "utf-8"));
+var extraData = JSON.parse(fs.readFileSync(argv["extra-data"], "utf-8"));
+add_data_to_geometry_objects(inputObject.objects.regions.geometries, extraData,
+    [["name", "name"], ["id", "domain_name"]]);
+var json = JSON.stringify(inputObject);
+fs.writeFileSync(argv.output, json, "utf-8");
+
+/**
+ * Add some properties from 'extraData' to objects in 'geometries'.
+ *
+ * @param geometries Array of topology objects, corresponds to 'geometries' property in GeometryCollection.  Function modifies the objects.
+ * @param extraData Array of hashes.
+ * @param propertiesMapping Array of 2-element arrays [geometryPropertyName, extraDataPropertyName].  The first pair describes join properties, which are used to match geometry objects with 'extraData' hashes.  Array should be at least of length 2.
+ */
+function add_data_to_geometry_objects(geometries, extraData, propertiesMapping) {
+    if (propertiesMapping.length < 2) {
+        throw new Error("assert: propertiesMapping should be at least of length 2");
+    }
+    var geometryJoinProperty = propertiesMapping[0][0],
+        extraDataJoinProperty = propertiesMapping[0][1];
+    propertiesMapping = propertiesMapping.slice(1);
+    // Map joinPropertyValue => extraObject.
+    var extraObjectByJoinProperty = d3.map();
+    extraData.forEach(function(extraObject) {
+        var joinPropertyValue = extraObject[extraDataJoinProperty];
+        // Join property should be always present.
+        if (joinPropertyValue === undefined) {
+            throw new Error("Missing value for join property '" + extraDataJoinProperty + "' in extraData");
+        }
+        // Join property should be unique.
+        if (extraObjectByJoinProperty.has(joinPropertyValue)) {
+            throw new Error("Duplicate value for join property '" + extraDataJoinProperty + "' in extraData");
+        }
+
+        extraObjectByJoinProperty.set(joinPropertyValue, extraObject);
+    });
+
+    geometries.forEach(function(object) {
+        var joinPropertyValue = getProperty(object, geometryJoinProperty);
+        if (joinPropertyValue === undefined) {
+            console.log("warning: Missing value for join property '" + geometryJoinProperty + "'");
+            return;
+        }
+        var extraObject = extraObjectByJoinProperty.get(joinPropertyValue);
+        if (extraObject === undefined) {
+            console.log("warning: No join counterpart for value '" + joinPropertyValue + "'");
+            return;
+        }
+        propertiesMapping.forEach(function(propertyMapping) {
+            var geometryObjectProperty = propertyMapping[0],
+                extraObjectProperty = propertyMapping[1];
+            var extraValue = extraObject[extraObjectProperty];
+            if (extraValue === undefined) {
+                console.log("warning: Missing value for extra object property '" + extraObjectProperty + "'");
+                return;
+            }
+            setProperty(object, geometryObjectProperty, extraValue);
+        });
+    });
+}
+
+function getProperty(object, property) {
+    if (property === "id") {
+        return object[property];
+    } else {
+        return object.properties[property];
+    }
+}
+
+function setProperty(object, property, value) {
+    if (property === "id") {
+        object[property] = value;
+    } else {
+        object.properties[property] = value;
+    }
+}

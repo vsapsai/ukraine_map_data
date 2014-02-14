@@ -79,10 +79,9 @@ def topo_edit_data_task(task_symbol, dependent_task_symbol, property_rule, join_
     input_file = topojson_output(dependent_task_symbol)
     result_file = topojson_output(task_symbol)
 
-    command = "topojson_edit_data/topojson_edit_data" +
-        " --property #{property_rule} --join-on #{join_rule}" +
-        " --external-data #{external_data_file_name} --out #{result_file}" +
-        " #{input_file}"
+    command = "topojson_edit/add_regions_data --input #{input_file}" +
+        " --extra-data #{external_data_file_name} --output #{result_file}"
+
     shell_command_task(result_file, [input_file, external_data_file_name], command)
     task task_symbol => result_file
 
