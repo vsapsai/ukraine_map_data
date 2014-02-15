@@ -1,0 +1,147 @@
+#!/usr/bin/env node
+
+var fs = require("fs"),
+    optimist = require("optimist");
+
+// Command line invocation looks like
+//
+// merge_cities_to_regions --input regions.topo.json
+//                         --output regions_without_cities.topo.json
+var argv = optimist
+    .options("input", {
+        describe: "input TopoJSON file name",
+        demand: true,
+    })
+    .options("output", {
+        describe: "output TopoJSON file name",
+        demand: true,
+    })
+    .options("help", {
+        describe: "print help message and exit",
+        type: "boolean",
+        default: false
+    })
+    .check(function(argv) {
+        if (argv.help) return;
+        if (argv._.length > 0) throw new Error("should be no positional arguments");
+    })
+    .argv;
+
+if (argv.help) return optimist.showHelp();
+
+var inputObject = JSON.parse(fs.readFileSync(argv.input, "utf-8"));
+// Merge 'Sevastopol' with 'Crimea', 'Kiev City' with 'Kiev'.
+mergeGeometryObjectsWithNames(inputObject.objects.regions.geometries, "Crimea", "Sevastopol");
+mergeGeometryObjectsWithNames(inputObject.objects.regions.geometries, "Kiev", "Kiev City");
+var json = JSON.stringify(inputObject);
+fs.writeFileSync(argv.output, json, "utf-8");
+
+
+function mergeGeometryObjectsWithNames(geometries, majorName, minorName) {
+    CHECK_(majorName !== minorName, "assert: Should merge geometry objects with different names");
+    var majorIndex = indexOfGeometryObjectWithName(geometries, majorName);
+    CHECK_(majorIndex >= 0, "No geometry object with name '" + majorName+ "'");
+    var minorIndex = indexOfGeometryObjectWithName(geometries, minorName);
+    CHECK_(minorIndex >= 0, "No geometry object with name '" + minorName+ "'");
+    var newGeometryObject = mergePolygons(geometries[majorIndex], geometries[minorIndex]);
+    geometries[majorIndex] = newGeometryObject;
+    geometries.splice(minorIndex, 1);
+}
+
+function indexOfGeometryObjectWithName(geometries, name) {
+    for (var i = 0; i < geometries.length; i++) {
+        if (geometries[i].properties.name === name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Returns new geometry object Polygon which is the same as 'majorPolygon'
+// only arcs describe merged polygon.
+//
+// The algorithm is:
+// - find arcs common to both polygons;
+// - build new polygon out of 2 polygons by excluding common arcs.
+//
+// vsapsai: Mike Bostock has an example [Merging States](http://bl.ocks.org/mbostock/5416405).
+// But I've used different approach because I haven't figured out how to
+// transform boundary of merged area, which is GeoJSON geometry object, into
+// TopoJSON geometry object.
+function mergePolygons(majorPolygon, minorPolygon) {
+    CHECK_((majorPolygon.type === "Polygon") && (minorPolygon.type === "Polygon"), "Can merge only polygons");
+    CHECK_((majorPolygon.arcs.length == 1) || (minorPolygon.arcs.length == 1), "Cannot merge 2 polygons with holes.  Only one polygon can have holes");
+
+    // 'callback' should have a signature function(arcIndex, isReverse, linearRingIndex, arcIndexInRing)
+    function visitPolygonArcs(polygon, callback) {
+        polygon.arcs.forEach(function(linearRing, linearRingIndex) {
+            linearRing.forEach(function(arcIndex, arcIndexInRing) {
+                var isReverse = (arcIndex < 0);
+                var globalArcIndex = isReverse ? ~arcIndex : arcIndex;
+                callback(globalArcIndex, isReverse, linearRingIndex, arcIndexInRing);
+            });
+        });
+    }
+
+    // Find common arc.  Assume that there are no unnecessary joint points on
+    // the common boundary.  That's why there is only one common arc.  That's
+    // definitely false in general case, but in our case it is true.
+
+    // Store arcs positions in 'minorPolygon'.  Key is arc index, value is location object.
+    var minorPolygonArcs = {};
+    visitPolygonArcs(minorPolygon, function(arcIndex, isReverse, linearRingIndex, arcIndexInRing) {
+        CHECK_(!(arcIndex in minorPolygonArcs), "assert: Polygon shouldn't contain the same arc multiple times");
+        minorPolygonArcs[arcIndex] = {
+            isReverse: isReverse,
+            ringIndex: linearRingIndex,
+            indexInRing: arcIndexInRing
+        };
+    });
+
+    var commonArcLocation = null;
+    visitPolygonArcs(majorPolygon, function(arcIndex, isReverse, linearRingIndex, arcIndexInRing) {
+        var isCommonArc = (arcIndex in minorPolygonArcs);
+        if (isCommonArc) {
+            CHECK_(commonArcLocation === null, "assert: Expect only one common arc");
+            var minorLocation = minorPolygonArcs[arcIndex];
+            CHECK_((isReverse && !minorLocation.isReverse) || (!isReverse && minorLocation.isReverse),
+                "assert: Common arc should run in opposite directions in different polygons");
+            commonArcLocation = {
+                arcIndex: arcIndex,  // mostly for debugging
+                minor: minorLocation,
+                major: {
+                    isReverse: isReverse,
+                    ringIndex: linearRingIndex,
+                    indexInRing: arcIndexInRing
+                }
+            };
+        }
+    });
+    CHECK_(commonArcLocation !== null, "assert: No common arc is found");
+
+    var newLinearRing = [].concat(
+        majorPolygon.arcs[commonArcLocation.major.ringIndex].slice(0, commonArcLocation.major.indexInRing),
+        minorPolygon.arcs[commonArcLocation.minor.ringIndex].slice(commonArcLocation.minor.indexInRing + 1),
+        minorPolygon.arcs[commonArcLocation.minor.ringIndex].slice(0, commonArcLocation.minor.indexInRing),
+        majorPolygon.arcs[commonArcLocation.major.ringIndex].slice(commonArcLocation.major.indexInRing + 1)
+    );
+    var newArcs = majorPolygon.arcs.slice();
+    if (newLinearRing.length > 0) {
+        newArcs[commonArcLocation.major.ringIndex] = newLinearRing;
+    } else {
+        CHECK_(commonArcLocation.major.ringIndex > 0, "assert: majorPolygon collapsed into nothing, that's bad");
+        newArcs.splice(commonArcLocation.major.ringIndex, 1);
+    }
+
+    var newPolygon = {};
+    for (var key in majorPolygon) {
+        newPolygon[key] = (key !== "arcs") ? majorPolygon[key] : newArcs;
+    }
+    return newPolygon;
+}
+
+function CHECK_(condition, errorMessage) {
+    if (!condition) {
+        throw new Error(errorMessage);
+    }
+}

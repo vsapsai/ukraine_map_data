@@ -88,6 +88,18 @@ def topo_edit_data_task(task_symbol, dependent_task_symbol, property_rule, join_
     CLEAN.push(result_file)
 end
 
+def topo_edit_merge_regions_task(task_symbol, dependent_task_symbol)
+    input_file = topojson_output(dependent_task_symbol)
+    result_file = topojson_output(task_symbol)
+
+    command = "topojson_edit/merge_cities_to_regions --input #{input_file} --output #{result_file}"
+
+    shell_command_task(result_file, [input_file], command)
+    task task_symbol => result_file
+
+    CLEAN.push(result_file)
+end
+
 # Create tasks to merge a few TopoJSON files into a single TopoJSON file.
 # Properties from merged files are preserved.
 def topo_merge_task(task_symbol, dependent_tasks)
@@ -105,10 +117,11 @@ topo_task :countries, 'ne_10m_admin_0_countries', {
     :topo_args => "--id-property ADM0_A3 -p name=NAME -p name"}
 
 topo_task :regions, 'ne_10m_admin_1_states_provinces', {
-    :geo_args => %{-where "ADM0_A3 = 'UKR' AND name NOT IN ('Sevastopol', 'Kiev City')"},
+    :geo_args => %{-where "ADM0_A3 = 'UKR'"},
     :topo_args => '-p name'}
 
-topo_edit_data_task :regions_with_id, :regions, 'id=domain_name', 'name=name', reference_input('regions_data.json')
+topo_edit_merge_regions_task :regions_without_cities, :regions
+topo_edit_data_task :regions_with_id, :regions_without_cities, 'id=domain_name', 'name=name', reference_input('regions_data.json')
 
 topo_task :lakes, 'ne_10m_lakes', {
     :geo_args => "-clipdst #{DEFAULT_REGION}" + ' -where "scalerank < 8"',
