@@ -6,9 +6,9 @@ var fs = require("fs"),
 
 // Command line invocation looks like
 //
-// topojson_edit_data --input regions.topo.json
-//                    --extra-data regions_data.json
-//                    --output regions_with_id.topo.json
+// add_regions_data --input regions.topo.json
+//                  --extra-data regions_data.json
+//                  --output regions_with_id.topo.json
 var argv = optimist
     .options("input", {
         describe: "input TopoJSON file name",

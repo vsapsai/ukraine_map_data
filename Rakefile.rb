@@ -75,7 +75,7 @@ def topo_task(task_symbol, geo_data_name, args={})
 end
 
 # Create task(s) to generate TopoJSON file with some extra data added to an existing TopoJSON file.
-def topo_edit_data_task(task_symbol, dependent_task_symbol, property_rule, join_rule, external_data_file_name)
+def topo_edit_add_data_task(task_symbol, dependent_task_symbol, external_data_file_name)
     input_file = topojson_output(dependent_task_symbol)
     result_file = topojson_output(task_symbol)
 
@@ -121,7 +121,7 @@ topo_task :regions, 'ne_10m_admin_1_states_provinces', {
     :topo_args => '-p name'}
 
 topo_edit_merge_regions_task :regions_without_cities, :regions
-topo_edit_data_task :regions_with_id, :regions_without_cities, 'id=domain_name', 'name=name', reference_input('regions_data.json')
+topo_edit_add_data_task :regions_with_id, :regions_without_cities, reference_input('regions_data.json')
 
 topo_task :lakes, 'ne_10m_lakes', {
     :geo_args => "-clipdst #{DEFAULT_REGION}" + ' -where "scalerank < 8"',
