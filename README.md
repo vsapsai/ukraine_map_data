@@ -3,7 +3,7 @@ Ukraine map data suitable for [D3.js](http://d3js.org/) visualizations.
 
 ## Getting Started
 
-1. If you are new to D3.js, start with [Let’s Make a Map](http://bost.ocks.org/mike/map/) tutorial by [Mike Bostock](http://bost.ocks.org/mike/).  It explains basic D3.js concepts and demonstrates how to make a map.
+1. If you are new to D3.js, start with [Let’s Make a Map](http://bost.ocks.org/mike/map/) tutorial by [Mike Bostock](http://bost.ocks.org/mike/).  It explains basic D3.js concepts and demonstrates how to make a map.  Also take a look at [available examples](https://github.com/vsapsai/ukraine_map_data/wiki).
 
 2. If you are familiar with D3.js, just grab `ukraine.json` and go ahead, create visualizations you want.
 
