@@ -38,7 +38,7 @@ if (argv.help) return optimist.showHelp();
 var inputObject = JSON.parse(fs.readFileSync(argv.input, "utf-8"));
 var extraData = JSON.parse(fs.readFileSync(argv["extra-data"], "utf-8"));
 add_data_to_geometry_objects(inputObject.objects.regions.geometries, extraData,
-    [["name", "name"], ["id", "domain_name"]]);
+    [["name", "name"], ["id", "domain_name"], ["localized_name", "localized_name"]]);
 var json = JSON.stringify(inputObject);
 fs.writeFileSync(argv.output, json, "utf-8");
 
